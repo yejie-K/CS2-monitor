@@ -3,7 +3,8 @@ from playwright.sync_api import sync_playwright
 def manual_login_recorder():
     with sync_playwright() as p:
         # 1. 启动浏览器 (必须是 headless=False，否则你看不见)
-        browser = p.chromium.launch(headless=False)
+        #browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(channel="msedge", headless=False)
         context = browser.new_context()
         page = context.new_page()
 

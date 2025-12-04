@@ -3,7 +3,8 @@ from playwright.sync_api import sync_playwright
 def manual_login_youpin():
     with sync_playwright() as p:
         # 启动有头浏览器
-        browser = p.chromium.launch(headless=False)
+        #browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(channel="msedge", headless=False)
         context = browser.new_context()
         page = context.new_page()
 
