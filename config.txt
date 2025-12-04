@@ -1,0 +1,9 @@
+[EmailConfig]
+# 发件人邮箱 (你的QQ邮箱)
+SENDER_EMAIL = 1152796680@qq.com
+
+# 授权码 (开通SMTP服务时获取的16位代码，不是QQ密码！)
+SENDER_PASS = bewawxysrbtajdgb
+
+# 收件人邮箱 (接收通知的邮箱)
+RECEIVER_EMAIL = 1193617419@qq.com

@@ -1,0 +1,7 @@
+# 手动创建一个 requirements.txt，内容如下：
+pandas
+requests
+openpyxl
+xlsxwriter
+playwright
+pyinstaller
