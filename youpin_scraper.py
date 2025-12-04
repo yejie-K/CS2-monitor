@@ -166,7 +166,7 @@ def run_scraper():
     # ==========================================
     # 💾 Excel 生成 (已修复重复行问题)
     # ==========================================
-    output_filename = f"手套及其下级-uu {file_timestamp}.xlsx"
+    output_filename = f"UU_数据_{file_timestamp}.xlsx"
     print(f"\n📊 生成 Excel: {output_filename}")
 
     try:
