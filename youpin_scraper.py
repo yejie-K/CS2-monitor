@@ -55,7 +55,9 @@ def run_scraper():
     with sync_playwright() as p:
         print("🚀 [启动] V18 修复版：针对后四项移除多余下箭头操作")
         
-        browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
+        #browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
+        # 修改点：加上 channel="msedge"，让它使用电脑自带的 Edge 浏览器
+        browser = p.chromium.launch(channel="msedge", headless=False, args=["--disable-blink-features=AutomationControlled"])
         if os.path.exists(COOKIE_FILE):
             context = browser.new_context(storage_state=COOKIE_FILE)
         else:

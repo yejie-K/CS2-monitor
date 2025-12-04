@@ -58,7 +58,9 @@ def run_scraper():
     with sync_playwright() as p:
         print("🚀 启动浏览器...")
         # 启动参数优化
-        browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
+        #browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
+        # 修改点：加上 channel="msedge"，让它使用电脑自带的 Edge 浏览器
+        browser = p.chromium.launch(channel="msedge", headless=False, args=["--disable-blink-features=AutomationControlled"])
         
         # 如果没有 buff_auth.json，这里会报错，请确保已登录并保存了状态
         # 如果第一次运行没状态，可以先把 storage_state 去掉手动登录一次
