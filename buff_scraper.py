@@ -31,11 +31,18 @@ def get_target_skins():
         # 读取 Excel，不带表头，方便按行索引
         df = pd.read_excel(INPUT_FILE, header=None)
         
-        # 1. 获取第一行（忽略第一列）
+        # 1. 获取第一行（产出物）：强制追加 (久经沙场)
         row1_targets = df.iloc[0, 1:].dropna().astype(str).tolist()
-        targets.extend([t.strip() for t in row1_targets if t.strip()])
+        for t in row1_targets:
+            name = t.strip()
+            if name:
+                # 【关键修改】如果没有写磨损，自动加上 (久经沙场)
+                if "(久经沙场)" not in name:
+                    name = f"{name} (久经沙场)"
+                targets.append(name)
         
-        # 2. 获取第3-6行的第二列
+        # 2. 获取第3-6行的第二列（材料）：保持原样
+        # (通常材料在Excel里已经写全了磨损，如果没有，你也可以在这里照样加)
         col2_targets = df.iloc[2:6, 1].dropna().astype(str).tolist()
         targets.extend([t.strip() for t in col2_targets if t.strip()])
         
@@ -140,21 +147,16 @@ def run_scraper():
                 
                 try:
                     # === 优化点 2: 移除 reload，直接在 goto 时捕获请求 ===
-                    # 以前是: goto(加载一次) -> reload(加载第二次并抓包)
-                    # 现在是: 开启监听 -> goto(加载一次并直接被抓包)
                     with page.expect_response(lambda r: "goods/sell_order" in r.url and r.status == 200, timeout=6000):
                         page.goto(target_url)
                 except:
-                    # 超时通常意味着网络卡了，或者没有更多数据了
                     pass
                 
                 # === 优化点 3: 智能跳过 ===
-                # 如果第一页数据都没有（或者数据很少），说明这东西没人卖，不用去查第二页了
                 if p_num == 1 and len(current_prices) == 0:
                     print("   ⚠️ 第一页无数据，跳过后续页")
                     break
 
-                # 缩短每一页的间隔等待，因为我们没有 reload 了，速度已经很快了
                 time.sleep(0.5)
 
             # 3. 计算统计指标
@@ -171,7 +173,6 @@ def run_scraper():
                 print("   ⚠️ 无在售数据")
                 final_stats[skin_name] = {"最高": 0, "最低": 0, "均值": 0, "中位数": 0}
 
-            # 这里的等待也可以稍微缩短
             time.sleep(0.5)
 
         browser.close()
