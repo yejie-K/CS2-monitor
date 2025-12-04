@@ -100,6 +100,50 @@ def send_qq_email(df, config):
     html_table = df.to_html(escape=False, index=False, border=1, justify="center")
     
     msg = MIMEMultipart()
+    
+    # === 关键修复点 ===
+    # 错误写法: msg['From'] = Header(f"CS2监控 <{sender}>", 'utf-8')
+    # 正确写法: 只对中文昵称使用 Header 编码，邮箱地址保持明文，否则 QQ 会报错 550
+    msg['From'] = f"{Header('CS2监控', 'utf-8')} <{sender}>"
+    # =================
+    
+    msg['To'] = Header("Admin", 'utf-8')
+    msg['Subject'] = Header(f"行情监控 {datetime.now().strftime('%H:%M')}", 'utf-8')
+
+    body = f"""
+    <h3>CS2 炼金策略监控报告</h3>
+    <p><b>策略公式：</b> (A类价格 - B类最低价 × 5) / A类价格 > 15%</p>
+    <p><b>数据说明：</b> 价格取 Buff 与 悠悠有品 中的最低值。</p>
+    <hr>
+    {html_table}
+    <p style='font-size:12px; color:gray'>更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    """
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
+
+    try:
+        # QQ邮箱 SMTP 服务器
+        server = smtplib.SMTP_SSL("smtp.qq.com", 465)
+        server.login(sender, password)
+        server.sendmail(sender, [receiver], msg.as_string())
+        server.quit()
+        print("✅ 邮件发送成功！")
+    except Exception as e:
+        print(f"❌ 邮件发送失败: {e}")
+    """发送 QQ 邮件"""
+    sender = config.get("SENDER_EMAIL")
+    password = config.get("SENDER_PASS")
+    receiver = config.get("RECEIVER_EMAIL")
+
+    if not sender or not password or not receiver:
+        print("⚠️ 邮箱配置不完整，跳过发送")
+        return
+
+    print("📧 正在发送 QQ 邮件...")
+    
+    # 生成 HTML 表格
+    html_table = df.to_html(escape=False, index=False, border=1, justify="center")
+    
+    msg = MIMEMultipart()
     msg['From'] = Header(f"CS2监控 <{sender}>", 'utf-8')
     msg['To'] = Header("Admin", 'utf-8')
     msg['Subject'] = Header(f"行情监控 {datetime.now().strftime('%H:%M')}", 'utf-8')
