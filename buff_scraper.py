@@ -57,22 +57,19 @@ def run_scraper():
 
     with sync_playwright() as p:
         print("🚀 启动浏览器...")
-        # 启动参数优化
-        #browser = p.chromium.launch(headless=False, args=["--disable-blink-features=AutomationControlled"])
-        # 修改点：加上 channel="msedge"，让它使用电脑自带的 Edge 浏览器
+        # 启动参数优化：使用 Edge，禁用自动化特征
         browser = p.chromium.launch(channel="msedge", headless=False, args=["--disable-blink-features=AutomationControlled"])
         
-        # 如果没有 buff_auth.json，这里会报错，请确保已登录并保存了状态
-        # 如果第一次运行没状态，可以先把 storage_state 去掉手动登录一次
         try:
             context = browser.new_context(storage_state="buff_auth.json")
         except:
-            print("⚠️ 未找到登录信息 buff_auth.json，将以未登录模式运行（可能无法查看价格）")
+            print("⚠️ 未找到登录信息 buff_auth.json，将以未登录模式运行")
             context = browser.new_context()
 
         page = context.new_page()
-        # 拦截图片，加快速度
-        page.route("**/*.{png,jpg,jpeg,gif,webp}", lambda route: route.abort())
+        
+        # === 优化点 1: 扩大资源屏蔽范围 (字体、媒体也屏蔽，提速明显) ===
+        page.route("**/*.{png,jpg,jpeg,gif,webp,svg,mp4,woff,woff2,ttf}", lambda route: route.abort())
 
         # 当前正在处理的临时价格列表
         current_prices = []
@@ -96,41 +93,25 @@ def run_scraper():
         for idx, skin_name in enumerate(target_skins):
             print(f"\n[{idx+1}/{len(target_skins)}] 正在处理: {skin_name}")
             
-            # 1. 获取 ID (如果本地没有，则通过搜索栏交互获取)
+            # 1. 获取 ID
             goods_id = db.get(skin_name)
             if not goods_id:
-                print(f"   ⚠️ 本地无ID，正在执行：输入 -> 下箭头 -> 回车...")
-                
-                # 每次需要搜索 ID 时，强制回到市场首页，确保从“原来界面”开始
-                # 这样可以保证搜索环境一致，且 wait_for_url 逻辑更准确
+                print(f"   ⚠️ 本地无ID，执行搜索...")
                 page.goto("https://buff.163.com/market/csgo#tab=selling")
                 
                 try:
-                    # 定位搜索框 (Buff 通用搜索框通常 name='search')
                     search_input = page.locator("input[name='search']").first
-                    
-                    # 确保搜索框可见
                     search_input.wait_for(state="visible", timeout=5000)
                     
-                    # 清空并输入
                     search_input.click()
                     search_input.clear()
                     search_input.fill(skin_name)
                     
-                    # === 关键逻辑修改开始 ===
-                    # 1. 等待一下，让 Buff 后端返回联想词 (模拟人类反应)
-                    time.sleep(1.5) 
-                    
-                    # 2. 按下方向键下 (选中第一个联想词)
+                    time.sleep(1.0) # 稍微减少等待时间
                     page.keyboard.press("ArrowDown")
-                    time.sleep(0.5) 
-                    
-                    # 3. 按下回车 (进入商品页)
+                    time.sleep(0.2)
                     page.keyboard.press("Enter")
-                    # === 关键逻辑修改结束 ===
 
-                    # 等待URL变化包含 goods id
-                    # Buff 商品页 URL 格式通常是 .../goods/12345...
                     page.wait_for_url(re.compile(r".*/goods/\d+"), timeout=8000)
                     
                     match = re.search(r"goods/(\d+)", page.url)
@@ -140,15 +121,15 @@ def run_scraper():
                         save_db(db)
                         print(f"   ✅ 捕获成功 ID: {goods_id}")
                     else:
-                        print("   ❌ 跳转后未发现ID特征，跳过")
+                        print("   ❌ 未发现ID，跳过")
                         final_stats[skin_name] = None
                         continue
                 except Exception as e:
-                    print(f"   ❌ 搜索交互超时或失败: {e}")
+                    print(f"   ❌ 搜索失败: {e}")
                     final_stats[skin_name] = None
                     continue
 
-            # 2. 抓取数据 (已知 ID 后直接拼接 URL，效率更高)
+            # 2. 抓取数据 (性能优化核心部分)
             current_prices = [] 
             base_url = f"https://buff.163.com/goods/{goods_id}"
             
@@ -156,14 +137,25 @@ def run_scraper():
             
             for p_num in page_nums:
                 target_url = f"{base_url}?from=market#tab=selling&page_num={p_num}"
-                page.goto(target_url)
+                
                 try:
-                    with page.expect_response(lambda r: "goods/sell_order" in r.url and r.status == 200, timeout=5000):
-                        if p_num == 1: page.reload()
-                        else: pass 
+                    # === 优化点 2: 移除 reload，直接在 goto 时捕获请求 ===
+                    # 以前是: goto(加载一次) -> reload(加载第二次并抓包)
+                    # 现在是: 开启监听 -> goto(加载一次并直接被抓包)
+                    with page.expect_response(lambda r: "goods/sell_order" in r.url and r.status == 200, timeout=6000):
+                        page.goto(target_url)
                 except:
+                    # 超时通常意味着网络卡了，或者没有更多数据了
                     pass
-                time.sleep(0.5 + (0.2 * p_num))
+                
+                # === 优化点 3: 智能跳过 ===
+                # 如果第一页数据都没有（或者数据很少），说明这东西没人卖，不用去查第二页了
+                if p_num == 1 and len(current_prices) == 0:
+                    print("   ⚠️ 第一页无数据，跳过后续页")
+                    break
+
+                # 缩短每一页的间隔等待，因为我们没有 reload 了，速度已经很快了
+                time.sleep(0.5)
 
             # 3. 计算统计指标
             if current_prices:
@@ -179,7 +171,8 @@ def run_scraper():
                 print("   ⚠️ 无在售数据")
                 final_stats[skin_name] = {"最高": 0, "最低": 0, "均值": 0, "中位数": 0}
 
-            time.sleep(1)
+            # 这里的等待也可以稍微缩短
+            time.sleep(0.5)
 
         browser.close()
 
